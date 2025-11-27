@@ -1,49 +1,648 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DreamWeaver - 夢境解析</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <style>
-      body {
-        font-family: 'Noto Sans TC', sans-serif;
-        background-color: #0f172a; /* Slate 900 */
-        color: #f8fafc; /* Slate 50 */
-      }
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1e293b; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #475569; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; 
-      }
-    </style>
-  <script type="importmap">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>DreamWeaver - 夢境解析</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM (UMD) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel (for JSX) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Recharts (UMD) -->
+  <script src="https://unpkg.com/recharts@2.12.0/umd/Recharts.js"></script>
+  
+  <!-- D3.js (UMD) -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #0f172a; /* Slate 950 */
+      color: #f8fafc; /* Slate 50 */
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    
+    /* Animation classes */
+    .fade-in { animation: fadeIn 0.5s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
     "d3": "https://aistudiocdn.com/d3@^7.9.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.0"
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
   }
 }
 </script>
 </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+    const { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } = Recharts;
+
+    // --- Icons (Inline SVG Components to avoid dependency issues) ---
+    const Icon = ({ path, className, size = 24 }) => (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        width={size} 
+        height={size} 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className={className}
+      >
+        {path}
+      </svg>
+    );
+
+    const Icons = {
+      Plus: (props) => <Icon {...props} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />,
+      List: (props) => <Icon {...props} path={<><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></>} />,
+      Activity: (props) => <Icon {...props} path={<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>} />,
+      Share2: (props) => <Icon {...props} path={<><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></>} />,
+      Calendar: (props) => <Icon {...props} path={<><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>} />,
+      Users: (props) => <Icon {...props} path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
+      MapPin: (props) => <Icon {...props} path={<><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></>} />,
+      Heart: (props) => <Icon {...props} path={<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5 4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>} />,
+      HelpCircle: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></>} />,
+      RefreshCcw: (props) => <Icon {...props} path={<><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></>} />,
+      Loader2: (props) => <Icon {...props} className={`${props.className} animate-spin`} path={<path d="M21 12a9 9 0 1 1-6.21-14.99"/>} />,
+      Sparkles: (props) => <Icon {...props} path={<><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></>} />,
+      KeyRound: (props) => <Icon {...props} path={<><path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"/><circle cx="16.5" cy="7.5" r=".5"/></>} />,
+    };
+
+    // --- Constants ---
+    const DEFAULT_CHARACTERS = ["家人", "朋友", "伴侶", "陌生人", "狗", "貓", "逝者", "名人", "同事", "鬼怪", "小孩", "老師"];
+    const DEFAULT_LOCATIONS = ["家裡", "學校", "辦公室", "老家", "森林", "海邊", "城市", "未知房間", "樓梯", "山", "交通工具", "天空", "廁所", "電梯"];
+    const DEFAULT_EMOTIONS = ["害怕", "焦慮", "快樂", "困惑", "悲傷", "生氣", "平靜", "興奮", "愧疚", "羞恥", "愛", "孤單", "無助"];
+
+    const uuidv4 = () => {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    };
+
+    // --- Service: Gemini API (Using Fetch instead of SDK for pure browser compatibility) ---
+    const analyzeDreamText = async (apiKey, dreamText, context, reentryRecord) => {
+      const modelName = "gemini-2.0-flash"; // Using a widely available model
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+      const systemInstruction = `
+        You are an expert dream analyst and Jungian psychologist. 
+        Your task is to take a user's dream description and break it down into "fragments" (key scenes or thought units).
+        For each fragment, you must analyze:
+        1. Characters involved.
+        2. Locations.
+        3. Emotions felt.
+        4. Colors: If explicitly mentioned, use them. If not, INFER the color based on the emotion.
+        5. Actions taken.
+        6. Energy Score: An integer from 0 (low energy/passive) to 100 (high energy/intense).
+        7. Interpretation: A concise 1-sentence psychoanalytic interpretation of this specific fragment.
+
+        IMPORTANT: All text output MUST be in Traditional Chinese (繁體中文).
+        Return ONLY raw JSON. Do not use markdown code blocks.
+      `;
+
+      const prompt = `
+        Context/Recent Life Events: ${context || "None provided"}
+        Spiritual Re-entry/Active Imagination Record (Context only): ${reentryRecord || "None provided"}
+        Dream Description: ${dreamText}
+      `;
+
+      const payload = {
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        systemInstruction: {
+          parts: [{ text: systemInstruction }]
+        },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              fragments: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    text: { type: "STRING" },
+                    characters: { type: "ARRAY", items: { type: "STRING" } },
+                    locations: { type: "ARRAY", items: { type: "STRING" } },
+                    emotions: { type: "ARRAY", items: { type: "STRING" } },
+                    colors: { type: "ARRAY", items: { type: "STRING" } },
+                    actions: { type: "ARRAY", items: { type: "STRING" } },
+                    energy_score: { type: "INTEGER" },
+                    interpretation: { type: "STRING" },
+                  },
+                  required: ["text", "characters", "locations", "emotions", "colors", "actions", "energy_score", "interpretation"]
+                }
+              }
+            }
+          }
+        }
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+           const errData = await response.json();
+           throw new Error(errData.error?.message || "API Request Failed");
+        }
+
+        const data = await response.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!jsonText) throw new Error("No text returned from AI");
+        
+        const parsed = JSON.parse(jsonText);
+        return parsed.fragments.map(f => ({ ...f, id: uuidv4() }));
+      } catch (error) {
+        console.error("Gemini API Error:", error);
+        throw error;
+      }
+    };
+
+    // --- Component: TagSelector ---
+    const TagSelector = ({ title, icon, options, selected, onChange, placeholder, colorClass }) => {
+      const [customInput, setCustomInput] = useState('');
+
+      const toggleTag = (tag) => {
+        if (selected.includes(tag)) {
+          onChange(selected.filter(t => t !== tag));
+        } else {
+          onChange([...selected, tag]);
+        }
+      };
+
+      const handleAddCustom = () => {
+        if (customInput.trim() && !selected.includes(customInput.trim())) {
+          onChange([...selected, customInput.trim()]);
+          setCustomInput('');
+        }
+      };
+
+      const displayOptions = Array.from(new Set([...options, ...selected]));
+
+      return (
+        <div className="mb-6">
+          <label className="flex items-center text-sm font-medium text-slate-300 mb-3">
+            {icon}
+            <span className="ml-2">{title}</span>
+          </label>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {displayOptions.map(tag => {
+              const isSelected = selected.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className={`px-3 py-1.5 rounded-full text-xs transition-all border ${
+                    isSelected 
+                      ? `${colorClass} text-white border-transparent shadow-md` 
+                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                  }`}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+              className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder={placeholder}
+            />
+            <button onClick={handleAddCustom} className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-sm transition-colors">
+              <Icons.Plus size={16} />
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // --- Component: BadgeSystem ---
+    const INITIAL_BADGES = [
+      { id: 'beginner', name: '初次入夢', description: '記錄第一個夢境', icon: '🌙', condition: (dreams) => dreams.length >= 1 },
+      { id: 'storyteller', name: '夢語者', description: '累積 5 個夢境', icon: '📜', condition: (dreams) => dreams.length >= 5 },
+      { id: 'explorer', name: '潛意識探險家', description: '收集超過 20 個夢境碎片', icon: '🧩', condition: (dreams) => dreams.reduce((acc, d) => acc + d.fragments.length, 0) >= 20 },
+      { id: 'intense', name: '高能量釋放', description: '記錄一個能量分數 90 以上的夢', icon: '🔥', condition: (dreams) => dreams.some(d => d.fragments.some(f => f.energy_score >= 90)) },
+      { id: 'nightmare', name: '面對恐懼', description: '面對包含「害怕」的夢境', icon: '👁️', condition: (dreams) => dreams.some(d => d.fragments.some(f => f.emotions.some(e => e.includes('怕') || e.includes('恐')))) }
+    ];
+
+    const BadgeSystem = ({ dreams }) => {
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {INITIAL_BADGES.map((badge) => {
+            const isUnlocked = badge.condition(dreams);
+            return (
+              <div key={badge.id} className={`relative overflow-hidden rounded-2xl p-4 flex flex-col items-center justify-center text-center border transition-all duration-300 ${isUnlocked ? 'bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'bg-slate-800/50 border-slate-700 grayscale opacity-60'}`}>
+                <div className={`text-3xl mb-2 ${isUnlocked ? 'animate-bounce' : ''}`}>{badge.icon}</div>
+                <h4 className="font-bold text-slate-100 mb-1 text-sm">{badge.name}</h4>
+                <p className="text-[10px] text-slate-400">{badge.description}</p>
+                {!isUnlocked && <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center"><span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 bg-slate-900 px-2 py-1 rounded">Locked</span></div>}
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
+    // --- Component: NetworkGraph ---
+    const NetworkGraph = ({ dreams }) => {
+      const svgRef = useRef(null);
+
+      useEffect(() => {
+        if (!svgRef.current || dreams.length === 0) return;
+        
+        const nodes = [];
+        const links = [];
+        const nodeSet = new Set();
+
+        dreams.forEach(dream => {
+          dream.fragments.forEach(frag => {
+            if (!nodeSet.has(frag.id)) {
+              nodes.push({ id: frag.id, group: 'fragment', name: frag.text.substring(0, 10) + '...', val: 10 });
+              nodeSet.add(frag.id);
+            }
+            const addEntityNode = (entity, group) => {
+              const entityId = `${group}-${entity}`;
+              if (!nodeSet.has(entityId)) {
+                nodes.push({ id: entityId, group, name: entity, val: 5 });
+                nodeSet.add(entityId);
+              }
+              links.push({ source: frag.id, target: entityId });
+            };
+            frag.characters.forEach(c => addEntityNode(c, 'character'));
+            frag.emotions.forEach(e => addEntityNode(e, 'emotion'));
+            frag.locations.forEach(l => addEntityNode(l, 'location'));
+          });
+        });
+
+        const svg = d3.select(svgRef.current);
+        svg.selectAll("*").remove();
+        
+        // Ensure parent container has width
+        const width = svgRef.current.parentElement?.clientWidth || 600;
+        const height = 500;
+
+        const simulation = d3.forceSimulation(nodes)
+          .force("link", d3.forceLink(links).id(d => d.id).distance(80))
+          .force("charge", d3.forceManyBody().strength(-200))
+          .force("center", d3.forceCenter(width / 2, height / 2))
+          .force("collide", d3.forceCollide(30));
+
+        const link = svg.append("g").attr("stroke", "#475569").attr("stroke-opacity", 0.6).selectAll("line").data(links).join("line").attr("stroke-width", 1);
+        const node = svg.append("g").attr("stroke", "#fff").attr("stroke-width", 1.5).selectAll("circle").data(nodes).join("circle")
+          .attr("r", d => d.group === 'fragment' ? 8 : 5)
+          .attr("fill", d => {
+            switch (d.group) {
+              case 'fragment': return '#818cf8';
+              case 'emotion': return '#f472b6';
+              case 'character': return '#34d399';
+              case 'location': return '#fbbf24';
+              default: return '#94a3b8';
+            }
+          })
+          .call(d3.drag().on("start", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x; d.fy = d.y;
+          }).on("drag", (event, d) => {
+            d.fx = event.x; d.fy = event.y;
+          }).on("end", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null; d.fy = null;
+          }));
+
+        const label = svg.append("g").selectAll("text").data(nodes).join("text").text(d => d.name).attr('font-size', '10px').attr('fill', '#e2e8f0').attr('dx', 12).attr('dy', 4);
+
+        simulation.on("tick", () => {
+          link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+          node.attr("cx", d => d.x).attr("cy", d => d.y);
+          label.attr("x", d => d.x).attr("y", d => d.y);
+        });
+
+        return () => simulation.stop();
+      }, [dreams]);
+
+      return (
+        <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl relative">
+          <div className="absolute top-4 left-4 z-10 bg-slate-800/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-300">
+            <span className="inline-block w-2 h-2 rounded-full bg-indigo-400 mr-2"></span>片段
+            <span className="inline-block w-2 h-2 rounded-full bg-pink-400 ml-2 mr-2"></span>情緒
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 ml-2 mr-2"></span>人物
+          </div>
+          <svg ref={svgRef} className="w-full h-[500px]" style={{ cursor: 'grab' }}></svg>
+        </div>
+      );
+    };
+
+    // --- Component: Dashboard ---
+    const Dashboard = ({ dreams }) => {
+      const COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+      
+      const emotionData = useMemo(() => {
+        const counts = {};
+        dreams.forEach(d => d.fragments.forEach(f => f.emotions.forEach(e => counts[e] = (counts[e] || 0) + 1)));
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
+      }, [dreams]);
+
+      const colorData = useMemo(() => {
+        const counts = {};
+        dreams.forEach(d => d.fragments.forEach(f => f.colors.forEach(c => counts[c] = (counts[c] || 0) + 1)));
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+      }, [dreams]);
+
+      const energyTrend = useMemo(() => {
+        return dreams.slice().reverse().map((d, idx) => ({
+          name: new Date(d.date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'}),
+          energy: Math.round(d.fragments.reduce((sum, f) => sum + f.energy_score, 0) / (d.fragments.length || 1))
+        }));
+      }, [dreams]);
+
+      if (dreams.length === 0) return <div className="text-center text-slate-500 py-12">No data yet.</div>;
+
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+            <h3 className="text-lg font-semibold mb-4 text-slate-200">情緒 Top 5</h3>
+            <div className="h-64"><ResponsiveContainer><BarChart data={emotionData} layout="vertical"><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={60} tick={{fill:'#94a3b8'}} /><Tooltip contentStyle={{backgroundColor:'#1e293b', border:'none'}} /><Bar dataKey="value" fill="#818cf8" radius={[0,4,4,0]} /></BarChart></ResponsiveContainer></div>
+          </div>
+          <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+            <h3 className="text-lg font-semibold mb-4 text-slate-200">色彩能量</h3>
+            <div className="h-64"><ResponsiveContainer><PieChart><Pie data={colorData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{colorData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip contentStyle={{backgroundColor:'#1e293b', border:'none'}} /><Legend /></PieChart></ResponsiveContainer></div>
+          </div>
+          <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 md:col-span-2">
+            <h3 className="text-lg font-semibold mb-4 text-slate-200">能量趨勢</h3>
+            <div className="h-48"><ResponsiveContainer><BarChart data={energyTrend}><XAxis dataKey="name" tick={{fill:'#94a3b8'}} /><Tooltip contentStyle={{backgroundColor:'#1e293b', border:'none'}} /><Bar dataKey="energy" fill="#34d399" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></div>
+          </div>
+        </div>
+      );
+    };
+
+    // --- Main App Component ---
+    const App = () => {
+      const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+      const [view, setView] = useState('home');
+      const [dreams, setDreams] = useState([]);
+      const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+      // Form inputs
+      const [inputDate, setInputDate] = useState(new Date().toISOString().split('T')[0]);
+      const [inputDream, setInputDream] = useState('');
+      const [inputContext, setInputContext] = useState('');
+      const [inputReentryRecord, setInputReentryRecord] = useState('');
+      const [selectedCharacters, setSelectedCharacters] = useState([]);
+      const [selectedLocations, setSelectedLocations] = useState([]);
+      const [selectedEmotions, setSelectedEmotions] = useState([]);
+
+      useEffect(() => {
+        const saved = localStorage.getItem('dream-weaver-dreams');
+        if (saved) {
+          try { setDreams(JSON.parse(saved)); } catch (e) {}
+        }
+      }, []);
+
+      useEffect(() => {
+        if (dreams.length > 0) localStorage.setItem('dream-weaver-dreams', JSON.stringify(dreams));
+      }, [dreams]);
+
+      const saveKey = (key) => {
+        setApiKey(key);
+        localStorage.setItem('gemini_api_key', key);
+      };
+
+      const handleAnalyze = async () => {
+        if (!inputDream.trim() && selectedCharacters.length === 0 && selectedLocations.length === 0 && selectedEmotions.length === 0) {
+          alert("請至少輸入一些內容或選擇標籤。");
+          return;
+        }
+        setIsAnalyzing(true);
+        try {
+          let richText = inputDream.trim();
+          const metaParts = [];
+          if (selectedCharacters.length) metaParts.push(`人物: ${selectedCharacters.join(', ')}`);
+          if (selectedLocations.length) metaParts.push(`場景: ${selectedLocations.join(', ')}`);
+          if (selectedEmotions.length) metaParts.push(`情緒: ${selectedEmotions.join(', ')}`);
+          
+          if (metaParts.length > 0) richText += `\n\n[使用者補充標籤]\n${metaParts.join('\n')}`;
+          if (!inputDream.trim() && metaParts.length > 0) richText = `夢境包含：\n${metaParts.join('\n')}`;
+
+          const fragments = await analyzeDreamText(apiKey, richText, inputContext, inputReentryRecord);
+          const newDream = {
+            id: uuidv4(),
+            rawText: richText,
+            context: inputContext,
+            reentryRecord: inputReentryRecord,
+            date: new Date(inputDate).toISOString(),
+            fragments
+          };
+          setDreams(prev => [newDream, ...prev]);
+          
+          // Reset Form but keep date logic consistent
+          setInputDream(''); setInputContext(''); setInputReentryRecord('');
+          setSelectedCharacters([]); setSelectedLocations([]); setSelectedEmotions([]);
+          setView('journal');
+        } catch (e) {
+          console.error(e);
+          alert("解析失敗: " + e.message);
+        } finally {
+          setIsAnalyzing(false);
+        }
+      };
+
+      if (!apiKey) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4 fade-in">
+            <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl max-w-md w-full text-center">
+              <div className="w-16 h-16 bg-indigo-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/30">
+                <Icons.KeyRound className="text-white w-8 h-8" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-2">需要 API Key</h1>
+              <p className="text-slate-400 mb-6 text-sm">此應用程式為純前端運行，請輸入您的 Google Gemini API Key 以啟動 AI 分析功能。</p>
+              <input 
+                type="password" 
+                placeholder="貼上您的 API Key..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white mb-4 focus:ring-2 focus:ring-indigo-500 outline-none"
+                onKeyDown={(e) => { if(e.key === 'Enter') saveKey(e.currentTarget.value) }}
+                onBlur={(e) => { if(e.target.value) saveKey(e.target.value) }}
+              />
+              <div className="text-xs text-slate-500 mb-4 text-left bg-slate-950 p-3 rounded">
+                <strong>如何獲取 Key？</strong><br/>
+                1. 前往 <a href="https://aistudiocdn.com/apikey" target="_blank" className="text-indigo-400 underline">Google AI Studio</a><br/>
+                2. 登入並點擊 "Create API key"<br/>
+                3. 複製並貼上
+              </div>
+              <button className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all" onClick={() => {
+                const input = document.querySelector('input[type="password"]');
+                if(input && input.value) saveKey(input.value);
+              }}>
+                開始使用
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500 selection:text-white pb-24 fade-in">
+          {/* Header */}
+          <header className="fixed top-0 w-full bg-slate-900/80 backdrop-blur-md border-b border-slate-800 z-50">
+            <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-full flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">D</div>
+                <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">DreamWeaver</span>
+              </div>
+              <button onClick={() => saveKey('')} className="text-xs text-slate-500 hover:text-red-400 transition-colors">重設 Key</button>
+            </div>
+          </header>
+
+          {/* Content */}
+          <main className="pt-20 px-4 max-w-4xl mx-auto">
+            {view === 'home' && (
+              <div className="space-y-6 pb-12 fade-in">
+                <div className="text-center mb-8">
+                  <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300 mb-2">記錄你的夢境</h1>
+                  <p className="text-slate-400 text-sm">輸入內容或選取關鍵字，AI 將自動拆解碎片並解析潛意識。</p>
+                </div>
+                
+                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
+                  <div>
+                    <label className="flex items-center text-sm font-medium text-slate-300 mb-2"><Icons.Calendar className="w-4 h-4 mr-2 text-indigo-400"/> 夢境日期</label>
+                    <input type="date" value={inputDate} onChange={e => setInputDate(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-indigo-500" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">夢境內容 <span className="text-slate-500 text-xs">(選填)</span></label>
+                    <textarea value={inputDream} onChange={e => setInputDream(e.target.value)} className="w-full h-32 bg-slate-900 border border-slate-700 rounded-xl p-4 text-slate-200 outline-none focus:border-indigo-500 resize-none placeholder-slate-600" placeholder="我看見..." />
+                  </div>
+
+                  <div className="h-px bg-slate-700/50"></div>
+
+                  <TagSelector title="出現人物" icon={<Icons.Users className="w-4 h-4 text-emerald-400"/>} options={DEFAULT_CHARACTERS} selected={selectedCharacters} onChange={setSelectedCharacters} placeholder="新增..." colorClass="bg-emerald-600" />
+                  <TagSelector title="夢境場景" icon={<Icons.MapPin className="w-4 h-4 text-amber-400"/>} options={DEFAULT_LOCATIONS} selected={selectedLocations} onChange={setSelectedLocations} placeholder="新增..." colorClass="bg-amber-600" />
+                  <TagSelector title="情緒感受" icon={<Icons.Heart className="w-4 h-4 text-pink-400"/>} options={DEFAULT_EMOTIONS} selected={selectedEmotions} onChange={setSelectedEmotions} placeholder="新增..." colorClass="bg-pink-600" />
+
+                  <div className="h-px bg-slate-700/50"></div>
+
+                  <div>
+                    <label className="flex items-center text-sm font-medium text-slate-300 mb-2"><Icons.HelpCircle className="w-4 h-4 mr-2 text-indigo-400"/> 最近有什麼煩惱或事件？</label>
+                    <input type="text" value={inputContext} onChange={e => setInputContext(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-indigo-500" placeholder="工作壓力、剛看完電影..." />
+                  </div>
+
+                  <div className="bg-slate-900/50 p-4 rounded-xl border border-indigo-900/30">
+                    <label className="flex items-center text-sm font-medium text-indigo-300 mb-2"><Icons.RefreshCcw className="w-4 h-4 mr-2"/> 回到夢裡對話與紀錄 (進階靈性)</label>
+                    <p className="text-xs text-slate-500 mb-3">針對靈性者用潛意識回到夢裡再次與夢裡人事物做更深層的對話與詢問甚至改寫的紀錄</p>
+                    <textarea value={inputReentryRecord} onChange={e => setInputReentryRecord(e.target.value)} className="w-full h-24 bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 outline-none focus:border-indigo-500 resize-none" placeholder="我問他..." />
+                  </div>
+
+                  <button onClick={handleAnalyze} disabled={isAnalyzing} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center hover:opacity-90 transition-opacity disabled:opacity-50 shadow-indigo-500/30">
+                    {isAnalyzing ? <><Icons.Loader2 className="animate-spin mr-2"/> 解析中...</> : <><Icons.Sparkles className="mr-2"/> 開始解析</>}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {view === 'journal' && (
+              <div className="space-y-8 pb-12 fade-in">
+                  <h2 className="text-2xl font-bold text-slate-200 flex items-center"><Icons.List className="mr-2"/> 夢境碎片庫</h2>
+                  {dreams.length === 0 ? <p className="text-slate-500 text-center mt-12">尚未有紀錄。</p> : dreams.map(dream => (
+                    <div key={dream.id} className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 shadow-md">
+                      <div className="bg-slate-900/50 p-4 border-b border-slate-700 flex justify-between items-center">
+                        <span className="text-sm font-mono font-bold flex items-center text-slate-300"><Icons.Calendar className="w-3 h-3 mr-2"/>{new Date(dream.date).toLocaleDateString()}</span>
+                        {dream.context && <span className="text-xs bg-slate-700 px-2 py-1 rounded truncate max-w-[150px] text-slate-300">{dream.context}</span>}
+                      </div>
+                      <div className="p-4 text-slate-400 text-sm border-b border-slate-700/50 whitespace-pre-wrap">{dream.rawText.substring(0, 150)}{dream.rawText.length > 150 ? '...' : ''}</div>
+                      {dream.reentryRecord && (
+                        <div className="p-4 bg-indigo-950/20 border-b border-indigo-900/30">
+                          <div className="flex items-center text-xs font-bold text-indigo-300 mb-2"><Icons.RefreshCcw className="w-3 h-3 mr-1.5"/> 回到夢裡對話</div>
+                          <p className="text-slate-300 text-sm pl-4 border-l-2 border-indigo-500/30">{dream.reentryRecord}</p>
+                        </div>
+                      )}
+                      <div className="p-4 grid gap-4 md:grid-cols-2">
+                        {dream.fragments.map(f => (
+                          <div key={f.id} className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
+                            <div className="flex justify-between mb-2 items-start">
+                              <span className="text-sm font-medium text-slate-200">{f.text}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded font-mono ${f.energy_score > 70 ? 'bg-red-500/20 text-red-300' : f.energy_score < 30 ? 'bg-blue-500/20 text-blue-300' : 'bg-green-500/20 text-green-300'}`}>E:{f.energy_score}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {f.colors.map(c=><span key={c} className="text-[10px] px-1.5 bg-slate-600 rounded text-slate-300">🎨 {c}</span>)}
+                              {f.emotions.map(e=><span key={e} className="text-[10px] px-1.5 bg-pink-900/40 text-pink-200 rounded">❤️ {e}</span>)}
+                            </div>
+                            <div className="text-xs text-indigo-200 bg-indigo-950/30 p-2 rounded border border-indigo-500/20">🔮 {f.interpretation}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {dreams.length > 0 && <div className="mt-8"><h3 className="text-xl font-bold mb-4 text-slate-200">徽章</h3><BadgeSystem dreams={dreams}/></div>}
+              </div>
+            )}
+
+            {view === 'dashboard' && (
+              <div className="pb-12 fade-in">
+                <h2 className="text-2xl font-bold mb-6 text-slate-200 flex items-center"><Icons.Activity className="mr-2"/> 儀表板</h2>
+                <Dashboard dreams={dreams} />
+                <h2 className="text-2xl font-bold mt-12 mb-6 text-slate-200 flex items-center"><Icons.Share2 className="mr-2"/> 關聯星圖</h2>
+                <NetworkGraph dreams={dreams} />
+              </div>
+            )}
+          </main>
+
+          {/* Nav */}
+          <nav className="fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 pb-safe z-50">
+            <div className="flex justify-around items-center h-16 max-w-md mx-auto">
+              <button onClick={()=>setView('home')} className={`flex flex-col items-center justify-center w-full h-full ${view==='home'?'text-indigo-400':'text-slate-500 hover:text-slate-300'}`}><Icons.Plus size={24}/><span className="text-[10px] mt-1">記錄</span></button>
+              <button onClick={()=>setView('journal')} className={`flex flex-col items-center justify-center w-full h-full ${view==='journal'?'text-indigo-400':'text-slate-500 hover:text-slate-300'}`}><Icons.List size={24}/><span className="text-[10px] mt-1">碎片</span></button>
+              <button onClick={()=>setView('dashboard')} className={`flex flex-col items-center justify-center w-full h-full ${view==='dashboard'?'text-indigo-400':'text-slate-500 hover:text-slate-300'}`}><Icons.Activity size={24}/><span className="text-[10px] mt-1">洞察</span></button>
+            </div>
+          </nav>
+        </div>
+      );
+    };
+
+    // Mount App
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
 </html>
